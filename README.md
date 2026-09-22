@@ -319,3 +319,7 @@ Academic Capstone Project
 ## 📄 License
 
 This project is developed for educational and academic purposes.
+
+## 📅 Development Approach
+
+This project will be developed incrementally, with each major feature implemented, tested, committed, and reviewed through GitHub pull requests.
