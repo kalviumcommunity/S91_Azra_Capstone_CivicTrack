@@ -342,5 +342,7 @@ The Mock UX design presents the main screens and user flow of CIVIC track, a pla
 - **Complaints List:** Shows complaint records with search and filters.
 - **Complaint Details:** Shows individual complaint information and resolution status.
 
+- Improve Mock UX design
+
 ### User Flow
 Dashboard → Complaints List → Complaint Details → Track Resolution
