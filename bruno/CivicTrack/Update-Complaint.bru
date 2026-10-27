@@ -1,0 +1,26 @@
+
+meta {
+  name: Update Complaint
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/complaints/{{complaintId}}
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "status": "Resolved"
+  }
+}

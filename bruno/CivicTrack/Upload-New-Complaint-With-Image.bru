@@ -1,0 +1,24 @@
+
+meta {
+  name: Create Complaint With Image
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/complaints
+  body: multipartForm
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:multipart-form {
+  title: Broken street light
+  description: The street light is not working.
+  category: Electricity
+  location: Near the college gate
+  image: @file(/path/to/your/image.jpg)
+}
