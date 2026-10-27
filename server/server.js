@@ -10,11 +10,42 @@ app.use(cors());
 app.use(express.json());
 
 const Complaint = require("./models/Complaint");
+const User = require("./models/User");
 
-// GET API: Fetch all complaints
+// POST API: Create a user
+app.post("/api/users", async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and email are required",
+      });
+    }
+
+    const user = await User.create({ name, email });
+
+    return res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Create user error:", error.message);
+    return res.status(400).json({
+      success: false,
+      message: "Failed to create user",
+    });
+  }
+});
+
+// GET API: Fetch all complaints and their associated users
 app.get("/api/complaints", async (req, res) => {
   try {
-    const complaints = await Complaint.find().lean();
+    const complaints = await Complaint.find()
+      .populate("user", "name email")
+      .lean();
 
     return res.status(200).json({
       success: true,
@@ -33,7 +64,7 @@ app.get("/api/complaints", async (req, res) => {
 // POST API: Create a complaint
 app.post("/api/complaints", async (req, res) => {
   try {
-    const { title, description, category, location, status, priority } =
+    const { title, description, category, location, status, priority, user } =
       req.body;
 
     if (!title || !description || !category || !location) {
@@ -43,7 +74,7 @@ app.post("/api/complaints", async (req, res) => {
       });
     }
 
-    const complaint = await Complaint.create({
+    const complaintData = {
       ticketId: `CIVIC-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       title,
       description,
@@ -51,7 +82,28 @@ app.post("/api/complaints", async (req, res) => {
       location,
       status,
       priority,
-    });
+    };
+
+    if (user) {
+      if (!mongoose.isValidObjectId(user)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID",
+        });
+      }
+
+      const existingUser = await User.findById(user);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      complaintData.user = user;
+    }
+
+    const complaint = await Complaint.create(complaintData);
 
     return res.status(201).json({
       success: true,
@@ -60,7 +112,6 @@ app.post("/api/complaints", async (req, res) => {
     });
   } catch (error) {
     console.error("POST error:", error.message);
-
     return res.status(500).json({
       success: false,
       message: "Failed to create complaint",
@@ -115,7 +166,6 @@ app.put("/api/complaints/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("PUT error:", error.message);
-
     return res.status(400).json({
       success: false,
       message: "Failed to update complaint",
