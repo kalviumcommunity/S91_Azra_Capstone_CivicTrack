@@ -2,9 +2,12 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
+const path = require("path");
+
+require("dotenv").config({
+  path: path.join(__dirname, ".env"),
+});
 
 const app = express();
 
@@ -14,7 +17,56 @@ app.use(express.json());
 const Complaint = require("./models/Complaint");
 const User = require("./models/User");
 
-// REGISTER: Create a user with a hashed password
+const PORT = process.env.PORT || 5001;
+
+// Check required environment variables
+if (!process.env.MONGO_URI) {
+  console.error("Error: MONGO_URI is missing from server/.env");
+  process.exit(1);
+}
+
+// JWT AUTHORIZATION MIDDLEWARE
+function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      success: false,
+      message: "Access denied. No token provided.",
+    });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token || !process.env.JWT_SECRET) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid token or authentication configuration.",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (!decoded.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token payload.",
+      });
+    }
+
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token.",
+    });
+  }
+}
+
+// REGISTER
+// Password hashing is handled by the User model.
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -27,17 +79,21 @@ app.post("/api/auth/register", async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Name, email, and password of at least 8 characters are required",
+        message:
+          "Name, email, and password of at least 8 characters are required.",
       });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const existingUser = await User.findOne({ email: normalizedEmail });
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "Email already registered",
+        message: "Email already registered.",
       });
     }
 
@@ -49,7 +105,7 @@ app.post("/api/auth/register", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful",
+      message: "Registration successful.",
       data: {
         id: user._id,
         name: user.name,
@@ -62,18 +118,18 @@ app.post("/api/auth/register", async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: "Email already registered",
+        message: "Email already registered.",
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: "Registration failed",
+      message: "Registration failed.",
     });
   }
 });
 
-// LOGIN: Verify password and return a JWT
+// LOGIN
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -81,7 +137,7 @@ app.post("/api/auth/login", async (req, res) => {
     if (!email?.trim() || typeof password !== "string" || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Email and password are required.",
       });
     }
 
@@ -92,14 +148,14 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password",
+        message: "Invalid email or password.",
       });
     }
 
     if (!process.env.JWT_SECRET) {
       return res.status(500).json({
         success: false,
-        message: "Authentication is not configured",
+        message: "JWT_SECRET is missing from server/.env.",
       });
     }
 
@@ -111,7 +167,7 @@ app.post("/api/auth/login", async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Login successful",
+      message: "Login successful.",
       token,
       user: {
         id: user._id,
@@ -121,15 +177,16 @@ app.post("/api/auth/login", async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error.message);
+
     return res.status(500).json({
       success: false,
-      message: "Login failed",
+      message: "Login failed.",
     });
   }
 });
 
-// GET: Fetch complaints with associated users
-app.get("/api/complaints", async (req, res) => {
+// GET ALL COMPLAINTS (JWT required)
+app.get("/api/complaints", verifyToken, async (req, res) => {
   try {
     const complaints = await Complaint.find()
       .populate("user", "name email")
@@ -142,15 +199,16 @@ app.get("/api/complaints", async (req, res) => {
     });
   } catch (error) {
     console.error("GET complaints error:", error.message);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch complaints",
+      message: "Failed to fetch complaints.",
     });
   }
 });
 
-// POST: Create a complaint
-app.post("/api/complaints", async (req, res) => {
+// CREATE COMPLAINT (JWT required)
+app.post("/api/complaints", verifyToken, async (req, res) => {
   try {
     const {
       title,
@@ -159,69 +217,56 @@ app.post("/api/complaints", async (req, res) => {
       location,
       status,
       priority,
-      user,
     } = req.body;
 
-    if (!title || !description || !category || !location) {
+    if (
+      !title?.trim() ||
+      !description?.trim() ||
+      !category?.trim() ||
+      !location?.trim()
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Title, description, category, and location are required",
+        message:
+          "Title, description, category, and location are required.",
       });
     }
 
     const complaintData = {
       ticketId: `CIVIC-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-      title,
-      description,
+      title: title.trim(),
+      description: description.trim(),
       category,
-      location,
+      location: location.trim(),
       status,
       priority,
+      user: req.userId,
     };
-
-    if (user) {
-      if (!mongoose.isValidObjectId(user)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid user ID",
-        });
-      }
-
-      const existingUser = await User.findById(user);
-
-      if (!existingUser) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      complaintData.user = user;
-    }
 
     const complaint = await Complaint.create(complaintData);
 
     return res.status(201).json({
       success: true,
-      message: "Complaint created successfully",
+      message: "Complaint created successfully.",
       data: complaint,
     });
   } catch (error) {
     console.error("POST complaint error:", error.message);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to create complaint",
+      message: "Failed to create complaint.",
     });
   }
 });
 
-// PUT: Update a complaint by ID
-app.put("/api/complaints/:id", async (req, res) => {
+// UPDATE COMPLAINT (JWT required)
+app.put("/api/complaints/:id", verifyToken, async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid complaint ID",
+        message: "Invalid complaint ID.",
       });
     }
 
@@ -245,7 +290,7 @@ app.put("/api/complaints/:id", async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Provide at least one valid field to update",
+        message: "Provide at least one valid field to update.",
       });
     }
 
@@ -258,27 +303,26 @@ app.put("/api/complaints/:id", async (req, res) => {
     if (!complaint) {
       return res.status(404).json({
         success: false,
-        message: "Complaint not found",
+        message: "Complaint not found.",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Complaint updated successfully",
+      message: "Complaint updated successfully.",
       data: complaint,
     });
   } catch (error) {
     console.error("PUT complaint error:", error.message);
-    return res.status(400).json({
+
+    return res.status(500).json({
       success: false,
-      message: "Failed to update complaint",
+      message: "Failed to update complaint.",
     });
   }
 });
 
-// Start server after connecting to MongoDB
-const PORT = process.env.PORT || 5000;
-
+// CONNECT TO MONGODB AND START SERVER
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
