@@ -11,7 +11,7 @@ app.use(express.json());
 
 const Complaint = require("./models/Complaint");
 
-// GET: Fetch all complaints
+// GET API: Fetch all complaints
 app.get("/api/complaints", async (req, res) => {
   try {
     const complaints = await Complaint.find().lean();
@@ -30,7 +30,7 @@ app.get("/api/complaints", async (req, res) => {
   }
 });
 
-// POST: Create a complaint
+// POST API: Create a complaint
 app.post("/api/complaints", async (req, res) => {
   try {
     const { title, description, category, location, status, priority } =
@@ -59,25 +59,66 @@ app.post("/api/complaints", async (req, res) => {
       data: complaint,
     });
   } catch (error) {
-    console.error("POST error:", error);
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Duplicate ticket ID. Please retry.",
-      });
-    }
-
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
+    console.error("POST error:", error.message);
 
     return res.status(500).json({
       success: false,
       message: "Failed to create complaint",
+    });
+  }
+});
+
+// PUT API: Update a complaint by ID
+app.put("/api/complaints/:id", async (req, res) => {
+  try {
+    const allowedFields = [
+      "title",
+      "description",
+      "category",
+      "location",
+      "status",
+      "priority",
+    ];
+
+    const updates = {};
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide at least one valid field to update",
+      });
+    }
+
+    const complaint = await Complaint.findByIdAndUpdate(
+      req.params.id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: "Complaint not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Complaint updated successfully",
+      data: complaint,
+    });
+  } catch (error) {
+    console.error("PUT error:", error.message);
+
+    return res.status(400).json({
+      success: false,
+      message: "Failed to update complaint",
     });
   }
 });
