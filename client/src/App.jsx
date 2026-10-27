@@ -1,9 +1,12 @@
 
 import { useState } from "react";
+import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "./components/Navbar";
 import Dashboard from "./components/Dashboard";
 import ComplaintCard from "./components/ComplaintCard";
 import Footer from "./components/Footer";
+
+const API_URL = "http://localhost:5001";
 
 function App() {
   const [complaints, setComplaints] = useState([
@@ -20,6 +23,58 @@ function App() {
       status: "Resolved",
     },
   ]);
+
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function handleGoogleSuccess(response) {
+    if (!response.credential) {
+      setMessage("Google did not return a credential.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const result = await fetch(`${API_URL}/api/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          credential: response.credential,
+        }),
+      });
+
+      const data = await result.json();
+
+      if (!result.ok || !data.success) {
+        throw new Error(data.message || "Google login failed.");
+      }
+
+      setUser(data.user);
+      setMessage("Google login successful!");
+
+      // Store the app's JWT, not Google's ID credential.
+      sessionStorage.setItem("civicTrackToken", data.token);
+    } catch (error) {
+      setMessage(error.message || "Unable to sign in with Google.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleGoogleError() {
+    setMessage("Google sign-in was cancelled or failed.");
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem("civicTrackToken");
+    setUser(null);
+    setMessage("You have been signed out.");
+  }
 
   function handleEdit(id) {
     const complaint = complaints.find((item) => item.id === id);
@@ -59,6 +114,39 @@ function App() {
       <Navbar />
 
       <main>
+        <section
+          style={{
+            maxWidth: "420px",
+            margin: "24px auto",
+            padding: "20px",
+            textAlign: "center",
+          }}
+        >
+          {user ? (
+            <>
+              <h2>Welcome, {user.name}!</h2>
+              <p>{user.email}</p>
+              <button type="button" onClick={handleLogout}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <h2>Sign in to CivicTrack</h2>
+              <p>Use your Google account to continue.</p>
+
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+              />
+
+              {loading && <p>Signing in...</p>}
+            </>
+          )}
+
+          {message && <p role="status">{message}</p>}
+        </section>
+
         <Dashboard />
 
         {complaints.map((complaint) => (
