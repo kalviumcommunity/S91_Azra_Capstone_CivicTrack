@@ -1,0 +1,29 @@
+
+meta {
+  name: Create Complaint
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/complaints
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "title": "Broken street light",
+    "description": "The street light is not working.",
+    "category": "Electricity",
+    "location": "Near the college gate"
+  }
+}
