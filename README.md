@@ -323,3 +323,24 @@ This project is developed for educational and academic purposes.
 ## 📅 Development Approach
 
 This project will be developed incrementally, with each major feature implemented, tested, committed, and reviewed through GitHub pull requests.
+
+
+
+
+---
+
+## CIVIC track — Mock UX Design
+
+The Mock UX design presents the main screens and user flow of CIVIC track, a platform designed to help local governments monitor citizen complaints and identify recurring issues.
+
+### Mock UX Design
+
+**Public Design Link:** https://www.figma.com/design/oboOqljcJaDb0G0wwrczcU/Civic-Track?node-id=0-1&t=CBERGFm3ZFDjhfhB-1
+
+### Main Screens
+- **Overview Dashboard:** Displays complaint statistics, trends, and priority areas.
+- **Complaints List:** Shows complaint records with search and filters.
+- **Complaint Details:** Shows individual complaint information and resolution status.
+
+### User Flow
+Dashboard → Complaints List → Complaint Details → Track Resolution
