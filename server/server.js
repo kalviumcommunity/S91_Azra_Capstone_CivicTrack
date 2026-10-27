@@ -4,6 +4,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const path = require("path");
+const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 
 require("dotenv").config({
   path: path.join(__dirname, ".env"),
@@ -18,6 +20,10 @@ const Complaint = require("./models/Complaint");
 const User = require("./models/User");
 
 const PORT = process.env.PORT || 5001;
+
+const googleClient = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID
+);
 
 // Check required environment variables
 if (!process.env.MONGO_URI) {
@@ -65,8 +71,7 @@ function verifyToken(req, res, next) {
   }
 }
 
-// REGISTER
-// Password hashing is handled by the User model.
+// REGISTER WITH EMAIL AND PASSWORD
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -129,7 +134,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// LOGIN
+// LOGIN WITH EMAIL AND PASSWORD
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -181,6 +186,84 @@ app.post("/api/auth/login", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Login failed.",
+    });
+  }
+});
+
+// GOOGLE AUTHENTICATION
+app.post("/api/auth/google", async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        message: "Google credential is required.",
+      });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: "Google authentication is not configured.",
+      });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (
+      !payload ||
+      !payload.sub ||
+      !payload.email ||
+      payload.email_verified !== true
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: "Google account could not be verified.",
+      });
+    }
+
+    const normalizedEmail = payload.email.toLowerCase();
+
+    let user = await User.findOne({
+      email: normalizedEmail,
+    });
+
+    if (!user) {
+      user = await User.create({
+        name: payload.name || normalizedEmail.split("@")[0],
+        email: normalizedEmail,
+        password: crypto.randomBytes(32).toString("hex"),
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Google login successful.",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error("Google authentication error:", error.message);
+
+    return res.status(401).json({
+      success: false,
+      message: "Google authentication failed.",
     });
   }
 });
